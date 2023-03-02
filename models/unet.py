@@ -1,6 +1,7 @@
 import torch.nn as nn
 from collections import OrderedDict
 import torch
+from torchsummary import torchsummary
 
 
 class Unet(nn.Module):
@@ -206,8 +207,10 @@ class ChangeUnet(nn.Module):
         )
 
 if __name__ == '__main__':
-    i1 = torch.randn(1, 3, 256, 256)
-    i2 = torch.randn(1, 3, 256, 256)
+    # i1 = torch.randn(1, 3, 256, 256)
+    # i2 = torch.randn(1, 3, 256, 256)
+    # model = ChangeUnet()
+    # output = model(i1, i2)
+    # print('sss')
     model = ChangeUnet()
-    output = model(i1, i2)
-    print('sss')
+    torchsummary.summary(model, input_size=(3, 256, 256))
