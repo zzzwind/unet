@@ -46,17 +46,17 @@ def train_one_epoch(model, otpimizer, scheduler, loss_fn, train_loader, val_load
         optimizer.step()
 
         # 累加损失和准确率
-        train_loss += batch_loss.item() * outputs.size(0)
+        train_loss += batch_loss.item()
         pixel_acc = get_pixel_accuracy(pred=outputs, label=label, num_classes=2)
-        train_acc += pixel_acc.item() * outputs.size(0)
+        train_acc += pixel_acc.item()
 
         # 计算f-score
         _f_score = f1_score(pred=outputs, label=label, num_classes=2)
-        train_f_score +=_f_score.item() * outputs.size(0)
+        train_f_score +=_f_score.item()
 
         # 计算miou
         _miou = miou(pred=outputs, label=label, num_classes=2)
-        train_miou += _miou.item() * outputs.size(0)
+        train_miou += _miou.item()
 
         pbar.set_postfix(**{'loss': batch_loss.item(),
                             'accuracy': pixel_acc.item(),
@@ -65,10 +65,10 @@ def train_one_epoch(model, otpimizer, scheduler, loss_fn, train_loader, val_load
                             'lr': get_lr(optimizer)})
 
     # 计算平均损失和准确率，并返回结果
-    train_loss /= len(train_loader.dataset)
-    train_acc /= len(train_loader.dataset)
-    train_f_score /= len(train_loader.dataset)
-    train_miou /= len(train_loader.dataset)
+    train_loss /= len(train_loader)
+    train_acc /= len(train_loader)
+    train_f_score /= len(train_loader)
+    train_miou /= len(train_loader)
     # 更新学习率
     scheduler.step()
     # return loss, acc
@@ -94,18 +94,18 @@ def train_one_epoch(model, otpimizer, scheduler, loss_fn, train_loader, val_load
                 F.one_hot(label.to(torch.int64), 2).permute(0, 3, 1, 2).float(),
                 multiclass=True
             )
-            val_loss += batch_loss.item() * outputs.size(0)
+            val_loss += batch_loss.item() * outputs
 
             # 计算准确率
             pixel_acc = get_pixel_accuracy(pred=outputs, label=label, num_classes=2)
-            val_acc += pixel_acc.item() * outputs.size(0)
+            val_acc += pixel_acc.item() * outputs
 
             # 计算fscore
             _f_score = f1_score(pred=outputs, label=label, num_classes=2)
-            val_f_score += _f_score.item() * outputs.size(0)
+            val_f_score += _f_score.item() * outputs
 
             _miou = miou(pred=outputs, label=label, num_classes=2)
-            val_miou += _miou.item() * outputs.size(0)
+            val_miou += _miou.item() * outputs
 
             vpbar.set_postfix(**{'val_loss': batch_loss.item(),
                                  'val_accuracy': pixel_acc.item(),
