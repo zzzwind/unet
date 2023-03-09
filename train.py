@@ -9,6 +9,7 @@ from metrics import get_pixel_accuracy, f1_score, miou
 from torch.utils.tensorboard import SummaryWriter
 import torch.nn.functional as F
 import torch.nn as nn
+import wandb
 
 
 
@@ -17,7 +18,7 @@ def get_lr(optimizer):
     for param_group in optimizer.param_groups:
         return param_group['lr']
 
-def train_one_epoch(model, otpimizer, scheduler, loss_fn, train_loader, val_loader, device, epoch_idx):
+def train_one_epoch(model, otpimizer, scheduler, loss_fn, train_loader, val_loader, device, epoch_idx, wandb):
     # 将模型设置为训练模式
     model.train()
     # 初始化损失和准确率
@@ -62,7 +63,34 @@ def train_one_epoch(model, otpimizer, scheduler, loss_fn, train_loader, val_load
                             'accuracy': pixel_acc.item(),
                             'f_score': _f_score.item(),
                             'miou': _miou.item(),
+
                             'lr': get_lr(optimizer)})
+        # images = []
+        # for image, mask, prediction in zip((before_image, after_image), label, outputs):
+        #     stack_image = torch.stack([image[0], image[1]], dim=0)
+        #     image_mask = wandb.Image(
+        #         stack_image,
+        #         masks={
+        #             "ground_truth": {
+        #                 "source": stack_image,
+        #                 "mask_data": mask,
+        #                 "class_labels": {
+        #                     0: "background",
+        #                     1: "building"
+        #                 }
+        #             },
+        #             "prediction": {
+        #                 "source": stack_image,
+        #                 "mask_data": prediction,
+        #                 "class_labels": {
+        #                     0: "background",
+        #                     1: "building"
+        #                 }
+        #             }
+        #         }
+        #     )
+        #     images.append(image_mask)
+        # wandb.log({"images": images}, commit=False)
 
     # 计算平均损失和准确率，并返回结果
     train_loss /= len(train_loader)
@@ -71,8 +99,9 @@ def train_one_epoch(model, otpimizer, scheduler, loss_fn, train_loader, val_load
     train_miou /= len(train_loader)
     # 更新学习率
     scheduler.step()
-    # return loss, acc
-    print(f"Epoch: {epoch_idx}, total_loss: {train_loss}, total_acc: {train_acc}, total f_score: {train_f_score}, total miou: {train_miou} lr: {get_lr(optimizer)}")
+
+    print(f"Epoch: {epoch_idx}, total_loss: {format(train_loss, '.3f')}, total_acc: {format(train_acc, '.3f')}, total f_score: {format(train_f_score, '.3f')}, total_miou: {format(train_miou, '.3f')} lr: {get_lr(optimizer)}")
+    wandb.log({"train_loss": train_loss, "train_acc": train_acc, "train_f_score": train_f_score, "train_miou": train_miou})
     # 验证过程
     model.eval()
     val_loss = 0
@@ -94,18 +123,18 @@ def train_one_epoch(model, otpimizer, scheduler, loss_fn, train_loader, val_load
                 F.one_hot(label.to(torch.int64), 2).permute(0, 3, 1, 2).float(),
                 multiclass=True
             )
-            val_loss += batch_loss.item() * outputs
+            val_loss += batch_loss.item()
 
             # 计算准确率
             pixel_acc = get_pixel_accuracy(pred=outputs, label=label, num_classes=2)
-            val_acc += pixel_acc.item() * outputs
+            val_acc += pixel_acc.item()
 
             # 计算fscore
             _f_score = f1_score(pred=outputs, label=label, num_classes=2)
-            val_f_score += _f_score.item() * outputs
+            val_f_score += _f_score.item()
 
             _miou = miou(pred=outputs, label=label, num_classes=2)
-            val_miou += _miou.item() * outputs
+            val_miou += _miou.item()
 
             vpbar.set_postfix(**{'val_loss': batch_loss.item(),
                                  'val_accuracy': pixel_acc.item(),
@@ -117,14 +146,14 @@ def train_one_epoch(model, otpimizer, scheduler, loss_fn, train_loader, val_load
         val_acc /= len(val_loader)
         val_f_score /= len(val_loader)
         val_miou /= len(val_loader)
-        print(f"Epoch: {epoch_idx}, total_loss: {val_loss}, total_acc: {val_acc}, total f_score: {val_f_score} total miou：{val_miou}")
-
+        print(f"Epoch: {epoch_idx}, total_loss: {format(val_loss, '.3f')}, total_acc: {format(val_acc, '.3f')}, total_f_score: {format(val_f_score, '.3f')} total_miou：{format(val_miou,'.3f')}")
+        wandb.log({"val_loss": val_loss, "val_acc": val_acc, "val_f_score": val_f_score, "val_miou": val_miou})
 
 
 
 if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    weight_path = 'weight/change-net/change-net.pth'
+    weight_path = 'param/change-net'
     # img_path = 'images'
     img_path = r'F:\dataset\whu-change-detection\images'
     full_ds = ChangeNetDataset(path=img_path)
@@ -138,13 +167,13 @@ if __name__ == '__main__':
         dataset=train_ds,
         batch_size=32,
         shuffle=True,
-        num_workers=os.cpu_count()
+        # num_workers=os.cpu_count()
     )
     val_dl = DataLoader(
         dataset=val_ds,
         batch_size=64,
         shuffle=False,
-        num_workers=os.cpu_count(),
+        # num_workers=os.cpu_count(),
     )
 
     model = ChangeUnet(in_channels=3, out_channels=2, init_features=16)
@@ -161,8 +190,10 @@ if __name__ == '__main__':
 
     # tensorboard相关内容设置
     writer = SummaryWriter(log_dir='./log')
+    wandb.init(project='change-net')
+    wandb.config
 
-    epochs = 50
+    epochs = 200 
     for epoch in range(epochs):
        train_one_epoch(
            model=model,
@@ -172,8 +203,11 @@ if __name__ == '__main__':
            train_loader=train_dl,
            val_loader=val_dl,
            device=device,
-           epoch_idx=epoch
+           epoch_idx=epoch,
+           wandb=wandb
        )
+       if epoch % 10 == 0:
+           torch.save(model.state_dict(), os.path.join(weight_path, f"change-net-epoch-{epoch}-{epoch+9}.pth"))
 
 
 
