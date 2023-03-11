@@ -2,6 +2,7 @@ import torch.nn as nn
 from collections import OrderedDict
 import torch
 from torchsummary import torchsummary
+import torch.nn.functional as F
 
 
 class Unet(nn.Module):
@@ -206,11 +207,43 @@ class ChangeUnet(nn.Module):
             ])
         )
 
+
+class PSPModule(nn.Module):
+    def __init__(self, in_channels, pool_sizes, norm_layer):  # pool_sizes 可以有 6 3 2 1 等组合，即池化的大小
+        super(PSPModule, self).__init__()
+        out_channels = in_channels // len(pool_sizes)
+        self.stages = nn.ModuleList(
+            [self._make_stages(in_channels, out_channels, pool_size, norm_layer) for pool_size in pool_sizes ]
+        )
+        self.bottleneck = nn.Sequential(
+            nn.Conv2d(in_channels+(out_channels * len(pool_sizes)), out_channels, kernel_size=3, padding=1, bias=False),
+            norm_layer(out_channels),
+            nn.ReLU(inplace=True),
+            nn.Dropout(0.1)
+        )  # 将堆叠的特征层进行通道数的调整
+    def _make_stages(self, in_channels, out_channels, bin_sz, norm_layer):
+        prior = nn.AdaptiveAvgPool2d(output_size=bin_sz)  # 可以指定任意大小的输出形状
+        conv = nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=False)  # 首先利用1x1的卷积进行通道数的调整
+        bn = norm_layer(out_channels)
+        relu = nn.ReLU(inplace=True)
+        return nn.Sequential(prior, conv, bn, relu)
+
+    def forward(self, features):
+        h, w = features.size()[2], features.size()[3]
+        pyramids = [features]
+        pyramids.extend([F.interpolate(stage(features), size=(h, w), mode='bilinear', align_corners=True) for stage in self.stages])
+        output = self.bottleneck(torch.cat(pyramids, dim=1))
+        return output
+
+
+
 if __name__ == '__main__':
     # i1 = torch.randn(1, 3, 256, 256)
     # i2 = torch.randn(1, 3, 256, 256)
     # model = ChangeUnet()
     # output = model(i1, i2)
     # print('sss')
-    model = ChangeUnet()
-    torchsummary.summary(model, input_size=(3, 256, 256))
+    # model = ChangeUnet()
+    # torchsummary.summary(model, input_size=(3, 256, 256))
+    image = torch.randn(32, 3, 256, 256)
+    ppm = PSPModule(3, [1, 2, 3, 6], nn.BatchNorm2d())
