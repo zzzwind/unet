@@ -22,14 +22,14 @@ def get_pixel_accuracy(pred, label, num_classes):
     return torch.diag(confusion_matrix).sum() / confusion_matrix.sum()
 
 
-def recall(pred, label, num_classes):
+def get_recall(pred, label, num_classes):
     # confusion_matrix: shape=(num_classes, num_classes)
     # return: recall
     confusion_matrix = get_confusion_matrix(pred, label, num_classes)
     recall = torch.diag(confusion_matrix) / (confusion_matrix.sum(dim=1) + 1e-20)
     return torch.mean(recall)
 
-def f1_score(pred, label, num_classes):
+def get_f1_score(pred, label, num_classes):
     # confusion_matrix: shape=(num_classes, num_classes)
     # return: F1-score
     confusion_matrix = get_confusion_matrix(pred, label, num_classes)
@@ -38,7 +38,7 @@ def f1_score(pred, label, num_classes):
     f1 = 2 * (precision * recall) / (precision + recall + 1e-20)
     return torch.mean(f1)
 
-def miou(pred, label, num_classes):
+def get_miou(pred, label, num_classes):
     # confusion_matrix: shape=(num_classes, num_classes)
     # return: mIoU
     confusion_matrix = get_confusion_matrix(pred, label, num_classes)
@@ -52,9 +52,9 @@ if __name__ == "__main__":
     label = torch.randn(2, 256, 256)
     cm = get_confusion_matrix(pred, label, 2)
     pa = get_pixel_accuracy(pred=pred, label=label, num_classes=2)
-    rc = recall(pred=pred,label=label, num_classes=2)
-    f1 = f1_score(pred,label,2)
-    mi = miou(pred,label,2)
-    recall = recall(cm)
-    miou = miou(cm)
+    rc = get_recall(pred=pred,label=label, num_classes=2)
+    f1 = get_f1_score(pred,label,2)
+    mi = get_miou(pred,label,2)
+    recall = get_recall(cm)
+    miou = get_miou(cm)
     print(cm)
