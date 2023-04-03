@@ -3,6 +3,7 @@ from collections import OrderedDict
 import torch
 from torchsummary import torchsummary
 import torch.nn.functional as F
+from cbam import MS_CAM
 
 
 class Unet(nn.Module):
@@ -44,14 +45,18 @@ class Unet(nn.Module):
 
         # 最后使用1x1的卷积核压缩通道数
         self.out = nn.Conv2d(features, out_channels, kernel_size=1)
+        self.feat4_attention = MS_CAM(channel=features * 8)
+        self.bottle_attention = MS_CAM(channel=features * 16)
+
 
     def forward(self, x1):
         # 编码阶段
         enc1 = self.encoder1(x1)
         enc2 = self.encoder2(self.pool1(enc1))
         enc3 = self.encoder3(self.pool2(enc2))
-        enc4 = self.encoder4(self.pool3(enc3))
+        enc4 = self.encoder4(self.pool3(self.feat4_attention(enc3)))
         bottleneck = self.bottleneck(self.pool4(enc4))
+        bottleneck = self.bottle_attention(bottleneck)
 
         # 解码阶段
         dec4 = self.upconv4(bottleneck)
