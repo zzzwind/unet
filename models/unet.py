@@ -54,8 +54,8 @@ class Unet(nn.Module):
         enc1 = self.encoder1(x1)
         enc2 = self.encoder2(self.pool1(enc1))
         enc3 = self.encoder3(self.pool2(enc2))
-        enc4 = self.encoder4(self.pool3(self.feat4_attention(enc3)))
-        bottleneck = self.bottleneck(self.pool4(enc4))
+        enc4 = self.encoder4(self.pool3(enc3))
+        bottleneck = self.bottleneck(self.pool4(self.feat4_attention(enc4)))
         bottleneck = self.bottle_attention(bottleneck)
 
         # 解码阶段
@@ -243,12 +243,13 @@ class PSPModule(nn.Module):
 
 
 if __name__ == '__main__':
-    # i1 = torch.randn(1, 3, 256, 256)
-    # i2 = torch.randn(1, 3, 256, 256)
-    # model = ChangeUnet()
+    i1 = torch.randn(1, 3, 256, 256)
+    i2 = torch.randn(1, 3, 256, 256)
+    model = Unet(init_features=64)
+    out = model(i1)
     # output = model(i1, i2)
-    # print('sss')
+    print('sss')
     # model = ChangeUnet()
-    # torchsummary.summary(model, input_size=(3, 256, 256))
+    torchsummary.summary(model, input_size=(3, 256, 256))
     image = torch.randn(32, 3, 256, 256)
-    ppm = PSPModule(3, [1, 2, 3, 6], nn.BatchNorm2d())
+    # ppm = PSPModule(3, [1, 2, 3, 6], nn.BatchNorm2d())
