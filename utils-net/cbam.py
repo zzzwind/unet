@@ -1,5 +1,6 @@
 import torch
 from torch import nn
+from ecanet import ECANet
 
 
 class ChannelAttention(nn.Module):
@@ -56,10 +57,39 @@ class CBAM(nn.Module):
         x = self.spatial_attention(x)
         return x
 
-if __name__ == '__main__':
-    image = torch.randn(2, 512, 256, 256)
-    cbam = CBAM(512)
-    out = cbam(image)
-    import pydensecrf.densecrf as dcrf
 
-    print(cbam)
+class MS_CAM(nn.Module):
+    def __init__(self, channel, kernel_size=7):
+        super(MS_CAM, self).__init__()
+        self.channel_attention = ECANet(channel=channel)
+        self.spatial_attention = SpatialAttention(kernel_size)
+        self.conv = nn.Conv2d(in_channels=channel, out_channels=channel, kernel_size=3, padding=1, bias=False)
+
+    def forward(self, x):
+
+        # 通道注意力机制这一个分枝
+        fca = self.channel_attention(x)
+        fca = fca + x
+        out1 = self.conv(fca)
+
+        # 空间注意力机制这个分枝
+        fsa = self.spatial_attention(x)
+        out2 = out1 + fsa
+
+        out = out1 + out2 + x
+        return out
+
+        pass
+
+
+if __name__ == '__main__':
+    # image = torch.randn(2, 512, 256, 256)
+    # cbam = CBAM(512)
+    # out = cbam(image)
+    # import pydensecrf.densecrf as dcrf
+    #
+    # print(cbam)
+    image = torch.randn(2, 512, 512, 512)
+    bam = MS_CAM(channel=512)
+    out = bam(image)
+    print(out)

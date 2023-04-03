@@ -19,3 +19,9 @@ class ECANet(nn.Module):
         out = self.conv(avg)
         out = self.sigmoid(out).view([b, c, 1, 1])
         return out * x
+
+if __name__ == "__main__":
+    a = ECANet(channel=512)
+    image = torch.randn(2,3,256, 256)
+    out = a(image)
+    print(out)
