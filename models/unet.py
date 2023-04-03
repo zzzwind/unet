@@ -7,7 +7,7 @@ from cbam import MS_CAM
 
 
 class Unet(nn.Module):
-    def __init__(self, in_channels=3, out_channels=2, init_features=16):
+    def __init__(self, in_channels=3, out_channels_s=2, out_channels_c=5, init_features=16):
         super(Unet, self).__init__()
 
         features = init_features
@@ -44,40 +44,135 @@ class Unet(nn.Module):
         self.decoder1 = Unet._block(features * 2, features, name="dec1")
 
         # 最后使用1x1的卷积核压缩通道数
-        self.out = nn.Conv2d(features, out_channels, kernel_size=1)
+        self.conv_s = nn.Conv2d(features, out_channels_s, kernel_size=1)
+
+        # Siamese classifier layers
+        self.upconv4_c = nn.ConvTranspose2d(features * 16, features * 8, kernel_size=2, stride=2)
+        self.conv4_c = Unet._block(features * 16, features * 16, name="conv4")
+
+        self.upconv3_c = nn.ConvTranspose2d(features * 16, features * 4, kernel_size=2, stride=2)
+        self.conv3_c = Unet._block(features * 8, features * 8, name="conv3")
+
+        self.upconv2_c = nn.ConvTranspose2d(features * 8, features * 2, kernel_size=2, stride=2)
+        self.conv2_c = Unet._block(features * 4, features * 4, name="conv2")
+
+        self.upconv1_c = nn.ConvTranspose2d(features * 4, features, kernel_size=2, stride=2)
+        self.conv1_c = Unet._block(features * 2, features * 2, name="conv1")
+
+        self.conv_c = nn.Conv2d(in_channels=features * 2, out_channels=out_channels_c, kernel_size=1)
+
+
+        # 注意力机制
         self.feat4_attention = MS_CAM(channel=features * 8)
         self.bottle_attention = MS_CAM(channel=features * 16)
 
 
-    def forward(self, x1):
-        # 编码阶段
-        enc1 = self.encoder1(x1)
-        enc2 = self.encoder2(self.pool1(enc1))
-        enc3 = self.encoder3(self.pool2(enc2))
-        enc4 = self.encoder4(self.pool3(enc3))
-        bottleneck = self.bottleneck(self.pool4(self.feat4_attention(enc4)))
-        bottleneck = self.bottle_attention(bottleneck)
+    # def forward(self, x1):
+    #     # 编码阶段
+    #     enc1 = self.encoder1(x1)
+    #     enc2 = self.encoder2(self.pool1(enc1))
+    #     enc3 = self.encoder3(self.pool2(enc2))
+    #     enc4 = self.encoder4(self.pool3(enc3))
+    #     bottleneck = self.bottleneck(self.pool4(self.feat4_attention(enc4)))
+    #     bottleneck = self.bottle_attention(bottleneck)
+    #
+    #     # 解码阶段
+    #     dec4 = self.upconv4(bottleneck)
+    #     dec4 = torch.cat((dec4, enc4), dim=1)
+    #     dec4 = self.decoder4(dec4)
+    #
+    #     dec3 = self.upconv3(dec4)
+    #     dec3 = torch.cat((dec3, enc3), dim=1)
+    #     dec3 = self.decoder3(dec3)
+    #
+    #     dec2 = self.upconv2(dec3)
+    #     dec2 = torch.cat((dec2, enc2), dim=1)
+    #     dec2 = self.decoder2(dec2)
+    #
+    #     dec1 = self.upconv1(dec2)
+    #     dec1 = torch.cat((dec1, enc1), dim=1)
+    #     dec1 = self.decoder1(dec1)
+    #
+    #     out = self.out(dec1)
+    #     return out
+    def forward(self, x1, x2):
+        # UNet on x1
+        enc1_1 = self.encoder1(x1)
+        enc2_1 = self.encoder2(self.pool1(enc1_1))
+        enc3_1 = self.encoder3(self.pool2(enc2_1))
+        enc4_1 = self.encoder4(self.pool3(enc3_1))
 
-        # 解码阶段
-        dec4 = self.upconv4(bottleneck)
-        dec4 = torch.cat((dec4, enc4), dim=1)
-        dec4 = self.decoder4(dec4)
+        bottleneck_1 = self.bottleneck(self.pool4(self.feat4_attention(enc4_1)))
+        bottleneck_1 = self.bottle_attention(bottleneck_1)
 
-        dec3 = self.upconv3(dec4)
-        dec3 = torch.cat((dec3, enc3), dim=1)
-        dec3 = self.decoder3(dec3)
+        dec4_1 = self.upconv4(bottleneck_1)
+        dec4_1 = torch.cat((dec4_1, enc4_1), dim=1)
+        dec4_1 = self.decoder4(dec4_1)
 
-        dec2 = self.upconv2(dec3)
-        dec2 = torch.cat((dec2, enc2), dim=1)
-        dec2 = self.decoder2(dec2)
+        dec3_1 = self.upconv3(dec4_1)
+        dec3_1 = torch.cat((dec3_1, enc3_1), dim=1)
+        dec3_1 = self.decoder3(dec3_1)
 
-        dec1 = self.upconv1(dec2)
-        dec1 = torch.cat((dec1, enc1), dim=1)
-        dec1 = self.decoder1(dec1)
+        dec2_1 = self.upconv2(dec3_1)
+        dec2_1 = torch.cat((dec2_1, enc2_1), dim=1)
+        dec2_1 = self.decoder2(dec2_1)
 
-        out = self.out(dec1)
-        return out
+        dec1_1 = self.upconv1(dec2_1)
+        dec1_1 = torch.cat((dec1_1, enc1_1), dim=1)
+        dec1_1 = self.decoder1(dec1_1)
 
+        # 添加注意力机制
+
+        # UNet on x2
+        enc1_2 = self.encoder1(x2)
+        enc2_2 = self.encoder2(self.pool1(enc1_2))
+        enc3_2 = self.encoder3(self.pool2(enc2_2))
+        enc4_2 = self.encoder4(self.pool3(enc3_2))
+
+        bottleneck_2 = self.bottleneck(self.pool4(self.feat4_attention(enc4_2)))
+        bottleneck_2 = self.bottle_attention(bottleneck_2)
+
+        dec4_2 = self.upconv4(bottleneck_2)
+        dec4_2 = torch.cat((dec4_2, enc4_2), dim=1)
+        dec4_2 = self.decoder4(dec4_2)
+
+        dec3_2 = self.upconv3(dec4_2)
+        dec3_2 = torch.cat((dec3_2, enc3_2), dim=1)
+        dec3_2 = self.decoder3(dec3_2)
+
+        dec2_2 = self.upconv2(dec3_2)
+        dec2_2 = torch.cat((dec2_2, enc2_2), dim=1)
+        dec2_2 = self.decoder2(dec2_2)
+
+        dec1_2 = self.upconv1(dec2_2)
+        dec1_2 = torch.cat((dec1_2, enc1_2), dim=1)
+        dec1_2 = self.decoder1(dec1_2)
+
+        # Siamese
+        dec1_c = bottleneck_2 - bottleneck_1
+
+        dec1_c = self.upconv4_c(dec1_c)  # features * 16 -> features * 8
+        diff_2 = enc4_2 - enc4_1  # features * 16 -> features * 8
+        dec2_c = torch.cat((diff_2, dec1_c), dim=1)  # 512
+        dec2_c = self.conv4_c(dec2_c)
+
+        dec2_c = self.upconv3_c(dec2_c)  # 512->256
+        diff_3 = enc3_2 - enc3_1
+        dec3_c = torch.cat((diff_3, dec2_c), dim=1)  # ->512
+        dec3_c = self.conv3_c(dec3_c)
+
+        dec3_c = self.upconv2_c(dec3_c)  # 512->256
+        diff_4 = enc2_2 - enc2_1
+        dec4_c = torch.cat((diff_4, dec3_c), dim=1)  #
+        dec4_c = self.conv2_c(dec4_c)
+
+        dec4_c = self.upconv1_c(dec4_c)
+        diff_5 = enc1_2 - enc1_1
+        dec5_c = torch.cat((diff_5, dec4_c), dim=1)
+        dec5_c = self.conv1_c(dec5_c)
+
+        # return self.conv_s(dec1_1), self.conv_s(dec1_2), self.conv_c(dec5_c)
+        return self.conv_c(dec5_c)
     # 两个卷积块
     # OrderDict里面放的list
     @staticmethod
@@ -245,11 +340,11 @@ class PSPModule(nn.Module):
 if __name__ == '__main__':
     i1 = torch.randn(1, 3, 256, 256)
     i2 = torch.randn(1, 3, 256, 256)
-    model = Unet(init_features=64)
-    out = model(i1)
+    model = Unet(init_features=64, out_channels_c=2)
+    out = model(i1, i2)
     # output = model(i1, i2)
     print('sss')
     # model = ChangeUnet()
-    torchsummary.summary(model, input_size=(3, 256, 256))
+    torchsummary.summary(model, [(3, 128, 128), (3, 128, 128)])
     image = torch.randn(32, 3, 256, 256)
     # ppm = PSPModule(3, [1, 2, 3, 6], nn.BatchNorm2d())
